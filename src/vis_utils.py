@@ -10,7 +10,7 @@ import ipywidgets as widgets
 from collections import defaultdict
 
 from utils import eps, bound
-from structs import SweepLine as SL
+from structs import SweepLine as SL, Segment, Point, pixelspassed
 from common import line, hot, current
 
 def _type_color(e):
@@ -40,8 +40,10 @@ def draw_all(segments, status, events, hot, current):
 	ax.grid(which='major', alpha=0.0)
 
 	seg_col = []
+	#print("statuss")
 	for s in status:
 		seg_col.append('green')
+	#	print(s)
 	seg_src = list(map(lambda seg: [(seg.start.x / seg.start.z, seg.start.y / seg.start.z), (seg.end.x / seg.end.z, seg.end.y / seg.end.z)], status))
 	ax.add_collection(mc.LineCollection(seg_src, colors=seg_col))
 
@@ -74,9 +76,13 @@ def draw_all(segments, status, events, hot, current):
 
 def visual_dump_pieces(xpos, status, segments, hot, current, filename):	
 	fig = draw_all(segments, status, line.events, hot, current)
-	print("xpos ",xpos)
 	if xpos is not None:
 		plt.axvline(xpos, ymin=0.05, ymax=0.95, color='black', linestyle='dashed')
+	plt.savefig(filename)
+	plt.close(fig)
+
+def dump_answer(segments, hot, filename):	
+	fig = draw_result(segments, hot)
 	plt.savefig(filename)
 	plt.close(fig)
 
@@ -87,6 +93,16 @@ def create_dump_func(folder, func, *args):
 	def dump(x=None):
 		nonlocal c
 		func(x, *args, filename = os.path.join(folder,'{}.png'.format(c)))
+		c += 1
+	return dump
+
+def create_dump_answer(folder, func, *args):
+	c = 0
+	shutil.rmtree(folder, ignore_errors=True)
+	os.makedirs(folder, exist_ok=True)
+	def dump():
+		nonlocal c
+		func(*args, filename = os.path.join(folder,'{}.png'.format(c)))
 		c += 1
 	return dump
 
@@ -130,3 +146,42 @@ def SlideShower(folder, frame_duration=800):
 	widgets.jslink((play, 'value'), (slider, 'value'))
 	box = widgets.VBox([img, widgets.HBox([play, slider])])
 	return box
+
+def draw_result(segments, hot):
+	bound = 10
+	ax_min, ax_max = 0 - eps / 2, bound + eps / 2 
+	fig = plt.figure(figsize=(8,8))
+	ax = fig.add_subplot(111, aspect='equal')
+	ax.set_xlim(ax_min, ax_max)
+	ax.set_ylim(ax_min, ax_max)
+	ax.set_xticks(np.arange(-eps / 2, bound, eps), minor=True)
+	ax.set_yticks(np.arange(-eps / 2, bound, eps), minor=True)
+	ax.grid(which='minor')
+	ax.grid(which='major', alpha=0.0)
+
+	for p in hot:
+		ax.add_patch(patches.Rectangle((p.sw.x / p.sw.z, p.sw.y / p.sw.z), eps, eps, alpha=0.5, facecolor="red"))
+
+	seg_col = []
+	seg_src = []
+	for p in pixelspassed.keys():
+		lis = pixelspassed[p]
+		lis.sort(key=lambda smth: smth[0])
+		q = 0
+		while (q < len(lis) - 1):
+			seg = Segment(Point(int(lis[q][1][0]), int(lis[q][1][1]), int(lis[q][1][2]), homogeneous=True), Point(int(lis[q + 1][1][0]), int(lis[q + 1][1][1]), int(lis[q + 1][1][2]), homogeneous=True))
+			seg_col.append('black')
+			seg_src.append(seg)
+			q += 1
+
+	seg_src = list(map(lambda seg: [(seg.start.x / seg.start.z, seg.start.y / seg.start.z), (seg.end.x / seg.end.z, seg.end.y / seg.end.z)], seg_src))
+	ax.add_collection(mc.LineCollection(seg_src, colors=seg_col))		
+
+	return fig
+
+
+def Result(folder):
+	this = open(os.path.join(folder,"0.png"), 'rb').read()
+	x, y = _get_png_info(this)
+	img = widgets.Image(value=this, width=x, height=y)
+	return img

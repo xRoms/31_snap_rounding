@@ -1,33 +1,26 @@
 from sortedcontainers import SortedList
 from utils import bound
 from random import uniform
-from structs import rounddd, Point, Pixel, Segment, SweepLine as SL, mkpoint
+from structs import rounded, Point, Pixel, Segment, SweepLine as SL, mkpoint
 import numpy as np
 
-source = [ [(0.3, 0.3), (2.1, 4.4)], [(0.6, 2.0), (2.7, 2.)] ]
-segments2  = list(map(lambda s: Segment(
-		mkpoint(s[0][0], s[0][1]),
-		mkpoint(s[1][0], s[1][1])
-	), source))
+segments = []
 
+def generate_segs(n, seed = None):
+	if (seed is not None):
+		np.random.seed(seed)
 
-segments = [Segment(mkpoint(4.1, 4.1), mkpoint(6.1, 0.1)), Segment(mkpoint(2.1, 2.1), mkpoint(8.1, 1.1)), 
-			Segment(mkpoint(2, 0), mkpoint(6.1, 4)), Segment(mkpoint(2.1, -0.1), mkpoint(6.0, 3.9)),
-			Segment(mkpoint(2, 1), mkpoint(3, 0))]
+	rand = lambda : np.random.randint(0, 5 * bound)
+	for i in range(n):
+		q, w= rand(), rand()
+		while q == w:
+			w = rand()
+		segments.append(Segment(Point(q, rand(), 5, homogeneous=True), Point(w, rand(), 5, homogeneous=True)))
 
-c = mkpoint(2.3, 4.5)
-print(rounddd(c))
+generate_segs(9, 111111)
 
-def generate_segs(n):
-	rand = lambda : uniform(0, bound)
-	build_segs([ [(rand(), rand()), (rand(), rand())] for i in range(n) ])
-
-def build_segs(source):
-	global segments
-	segments.extend(list(map(lambda s: Segment(
-		mkpoint(s[0][0], s[0][1]), 
-		mkpoint(s[1][0], s[1][1])
-	), source)))
+for q in segments:
+	print(q.start, " ", q.end)
 
 hot = []
 current = SortedList()

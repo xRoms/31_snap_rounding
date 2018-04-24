@@ -11,6 +11,47 @@ from cg.utils import gcd
 
 from utils import eps, handlers
 
+pixels = {}
+
+pixelspassed = {}
+
+def average(ceps, point):
+	zeps = int(gethomo(ceps))
+	m = gcd(point.z, zeps)
+	new_eps = int(zeps * ceps * (point.z // m))
+	new_point = Point(int(point.x * (zeps // m)), int(point.y * (zeps // m)), int(point.z * (zeps // m)), homogeneous=True)
+	return (new_eps, new_point)
+
+def point_inside(pixel, segment):
+	tmp = []
+	cnt = 0
+	for q in segment.intersections(pixel):
+		if (q is not None):
+			tmp.append(q)
+			cnt += 1
+	if cnt == 0:
+		return None
+	if cnt >= 2:
+		temp = tmp[0] + tmp[1]	
+		return Point(int(temp.x), int(temp.y), int(temp.z * 2), homogeneous=True)
+	return tmp[0]
+
+def add_pixel_to_seg(pixel, segment):
+	if (segment in pixelspassed) and (pixelspassed[segment] != None):
+		tmp = pixelspassed[segment]
+		pixelspassed.pop(segment)
+		tmp.append((point_inside(pixel, segment), pixel.center))
+		pixelspassed[segment] = tmp
+	else:
+		pixelspassed[segment] = [(point_inside(pixel, segment), pixel.center)]
+
+
+def get_pixel(a):
+	na = rounded(a)
+	if (na not in pixels):
+		pixels[na] = Pixel(na)
+	return pixels[na]
+
 def smart_gcd(a, b):
 	if a == 0:
 		return b
@@ -25,8 +66,8 @@ def normalize(smth):
 		q = 1
 	return Point(int(q * (smth.x // m)), int(q * (smth.y // m)), int(q * (smth.z // m)), homogeneous=True)
 
-def eprint(*args, **kwargs):
-    print(*args, file=sys.stderr, **kwargs)
+#def eprint(*args, **kwargs):
+#    print(*args, file=sys.stderr, **kwargs)
 
 def vol(point, *hyperplane):
 	return det(np.array([pt.coord for pt in hyperplane] + [point.coord]))
@@ -47,14 +88,15 @@ class Segment:
 	"""
 	Класс отрезка
 	"""
+
 	def __init__(self, a, b):
 		"""
 		Конструктор отрезка
 
 		:param a, b: концы отрезка, экземпляры Point
 		"""
-		self.start = min(a, b)
-		self.end = max(a, b)
+		self.start = normalize(min(a, b))
+		self.end = normalize(max(a, b))
 
 	def __eq__(self, other):
 		"""
@@ -65,88 +107,66 @@ class Segment:
 		"""
 		return self.start == other.start and self.end == other.end		
 
-	def __lt__(self, other):
-		"""
-		для корректной работы status в SweepLine
-		"""
-		new_self, new_other = self.start.same_level(other.start)
-		return new_self[1] < new_other[1]
-
-	def __le__(self, other):
-		return self < other or self == other
+	def __hash__(self):
+		return hash((self.start.x, self.start.y, self.start.z, self.end.x, self.end.y, self.end.z))
 
 	def atX(self, x):
-		intersection = self.intersects(Segment(mkpoint(x, 0), mkpoint(x, bound)))
-		if intersection is None: 
-			return self.start
-		return intersection
+		sx = self.start.x / self.start.z
+		ex = self.end.x / self.end.z - sx
+		dx = x - sx
+		sy = self.start.y / self.start.z
+		ey = self.end.y / self.end.z - sy
+		if (dx > ex):
+			return sy
+		return dx/ex * ey + sy
 
 	def intersects(self, other):
 		"""
 		пересечение отрезка с другим отрезком или с границами пикселя
 
-		:param other: экземпляр Segment или экземпляр Pixel
+		:param other: экземпляр Segment
 		:return: Point точка пересечения или None, если пересечения нет
 		"""
-		if isinstance(other, Segment):  #vrode ok
-			a, b = normalize(self.start), normalize(self.end)
-			c, d = normalize(other.start), normalize(other.end)
-			acd, bcd = turn(a, c, d), turn(b, c, d)
-			cab, dab = turn(c, a, b), turn(d, a, b)
+		a, b = normalize(self.start), normalize(self.end)
+		c, d = normalize(other.start), normalize(other.end)
+		acd, bcd = turn(a, c, d), turn(b, c, d)
+		cab, dab = turn(c, a, b), turn(d, a, b)
 
-			do_intersect = False
-			if acd == bcd == cab == dab == 0:
-				do_intersect = (a <= c <= b or a <= d <= b or c <= a <= d or c <= b <= d)
-			else:
-				do_intersect = acd != bcd and cab != dab
-			
-			if do_intersect:
-				cross = lambda a, b: np.cross([a.coord], [b.coord])
-				prod = np.cross(cross(a, b), cross(c, d))[0]
-				# point = Point(prod, homogeneous=True)
-				# return Point(int(point.x / point.z), int(point.y / point.z))
-				if (prod[0] == 0 and prod[1] == 0 and prod[2] == 0):
-					return None
-				return Point(prod, homogeneous = True)
-			return None
-
-		elif isinstance(other, Pixel):
-			upper = self.intersects(other.top())
-			right = self.intersects(other.right())
-			lower = self.intersects(other.bottom())
-			if upper is not None:
-				return upper
-			if right is not None:
-				return right
-			if lower is not None:
-				return lower
-			return None
-
+		do_intersect = False
+		if acd == bcd == cab == dab == 0:
+			do_intersect = (a <= c <= b or a <= d <= b or c <= a <= d or c <= b <= d)
 		else:
-			raise Exception('wrong argument type')
+			do_intersect = acd != bcd and cab != dab
+		
+		if do_intersect:
+			cross = lambda a, b: np.cross([a.coord], [b.coord])
+			prod = np.cross(cross(a, b), cross(c, d))[0]
+			if (prod[0] == 0 and prod[1] == 0 and prod[2] == 0):
+				return max(b,d)
+			return normalize(Point(prod, homogeneous = True))
+		return None
+
+	def intersections(self, pixel):
+		return  [self.intersects(pixel.right()), self.intersects(pixel.bottom()), self.intersects(pixel.top()), self.intersects(pixel.left())]
 
 	def __str__(self):
 		return '({}, {})'.format(self.start, self.end)
 
-def rounddd(x):
+def rounded(point):
 	"""
 	округляет точку до центра ближайшего пикселя
 
 	:param x: экземпляр Point
 	:return: Point, являющийся центром пикселя, которому принадлежит x
 	"""
-	zeps = gethomo(eps)
-	m = zeps // gcd(zeps, x.z)
-	new_eps = eps * x.z * m
-	new_x = int(halfround(x.x * m, new_eps))
-	new_y = int(halfround(x.y * m, new_eps))
-	new_z = int(x.z * m)
-	new_m = gcd(new_x, (gcd(new_y, new_z)))
-	return Point(new_x // new_m, new_y // new_m, new_z // new_m, homogeneous= True)
+
+	res = average(eps, point)
+	new_eps = res[0]
+	new_point = res[1]
+	return normalize(Point(int(halfround(new_point.x, new_eps)), int(halfround(new_point.y, new_eps)), int(new_point.z), homogeneous= True))
 
 
 def halfround(a, new_eps):
-	print("hround", a, " ", new_eps)
 	if (a % new_eps <= new_eps / 2): 
 		return a - a % new_eps
 	else:
@@ -157,7 +177,6 @@ class Pixel:
 	"""
 	Класс пикселя
 	"""
-	
 
 	def __init__(self, point):
 		"""
@@ -165,10 +184,7 @@ class Pixel:
 
 		:param point: экземпляр Point, точка внутри пикселя
 		"""
-		self.center = rounddd(point)
-		self.upper = SortedList()
-		self.lower = SortedList()
-		self.segs = []
+		self.center = rounded(point)
 
 	def __eq__(self, other):
 		"""
@@ -274,40 +290,28 @@ class Pixel:
 		return xpoint == xself + cureps
 
 	def get_top_neighbour(self, point):
-		cureps = eps / 2
-		zeps = int(gethomo(cureps))
-		trueps = int(cureps * zeps)
-		m = gcd(self.z, zeps)
-		new_eps = trueps * (self.z // m)
-		new_self = self.center * (zeps // m)
-		return Pixel(Point(int(new_self.x), int(new_self.y + 2 * new_eps), int(new_self.z * (zeps // m)), homogeneous = True))
+		res = average(eps, self.center)
+		new_eps = res[0]
+		new_self = res[1]
+		return get_pixel(Point(int(new_self.x), int(new_self.y + new_eps), int(new_self.z), homogeneous = True))
 
 	def get_bottom_neighbour(self, point):
-		cureps = eps / 2
-		zeps = int(gethomo(cureps))
-		trueps = int(cureps * zeps)
-		m = gcd(self.z, zeps)
-		new_eps = trueps * (self.z // m)
-		new_self = self.center * (zeps // m)
-		return Pixel(Point(int(new_self.x), int(new_self.y - 2 * new_eps), int(new_self.z * (zeps // m)), homogeneous = True))
+		res = average(eps, self.center)
+		new_eps = res[0]
+		new_self = res[1]
+		return get_pixel(Point(int(new_self.x), int(new_self.y - new_eps), int(new_self.z), homogeneous = True))
 
 	def get_left_neighbour(self, point):
-		cureps = eps / 2
-		zeps = int(gethomo(cureps))
-		trueps = int(cureps * zeps)
-		m = gcd(self.z, zeps)
-		new_eps = trueps * (self.z // m)
-		new_self = self.center * (zeps // m)
-		return Pixel(Point(int(new_self.x - 2 * new_eps), int(new_self.y), int(new_self.z * (zeps // m)), homogeneous = True))
+		res = average(eps, self.center)
+		new_eps = res[0]
+		new_self = res[1]
+		return get_pixel(Point(int(new_self.x - new_eps), int(new_self.y), int(new_self.z), homogeneous = True))
 
 	def get_right_neighbour(self, point):
-		cureps = eps / 2
-		zeps = int(gethomo(cureps))
-		trueps = int(cureps * zeps)
-		m = gcd(self.z, zeps)
-		new_eps = trueps * (self.z // m)
-		new_self = self.center * (zeps // m)
-		return Pixel(Point(int(new_self.x + 2 * new_eps), int(new_self.y), int(new_self.z * (zeps // m)), homogeneous = True))
+		res = average(eps, self.center)
+		new_eps = res[0]
+		new_self = res[1]
+		return get_pixel(Point(int(new_self.x + new_eps), int(new_self.y), int(new_self.z), homogeneous = True))
 
 	def get_neighbour(self, point):
 		"""
@@ -315,27 +319,17 @@ class Pixel:
 
 		:param point: экземпляр Point
 		:return: Pixel смежный пиксель
-		"""
-		eprint("start")
-		eprint(self.center)
-		eprint(point)
-		eprint("end")
-		cureps = eps / 2
-		zeps = int(gethomo(cureps))
-		trueps = int(cureps * zeps)
-		m = gcd(self.z, zeps)
-		new_eps = trueps * (self.z // m)
-		new_self = self.center * (zeps // m)
+		"""	
+		res = average(eps, self.center)
+		new_eps = res[0]
+		new_self = res[1]
+
 		if self.is_on_top(point):
-			return Pixel(Point(int(new_self.x), int(new_self.y + new_eps), int(new_self.z * (zeps // m)), homogeneous = True))
+			return get_pixel(Point(int(new_self.x), int(new_self.y + new_eps), int(new_self.z), homogeneous = True))
 		if self.is_on_bottom(point):
-			return Pixel(Point(int(new_self.x), int(new_self.y - new_eps), int(new_self.z * (zeps // m)), homogeneous = True))
-		if self.is_on_left(point):
-			return Pixel(Point(int(new_self.x - new_eps), int(new_self.y), int(new_self.z * (zeps // m)), homogeneous = True))
-		if self.is_on_right(point):
-			return Pixel(Point(int(new_self.x + new_eps), int(new_self.y), int(new_self.z * (zeps // m)), homogeneous = True))
+			return get_pixel(Point(int(new_self.x), int(new_self.y - new_eps), int(new_self.z), homogeneous = True))
 		else:
-			raise Exception('given point is not on pixel\'s side')
+			return None
 
 	@property
 	def x(self):
@@ -351,43 +345,31 @@ class Pixel:
 
 	@property
 	def nw(self):
-		cureps = eps / 2
-		zeps = int(gethomo(cureps))
-		trueps = int(cureps * zeps)
-		m = gcd(self.z, zeps)
-		new_eps = trueps * (self.z // m)
-		new_self = self.center * (zeps // m)
-		return Point(int(new_self.x - new_eps), int(new_self.y + new_eps), int(new_self.z * (zeps // m)), homogeneous = True)
+		res = average(eps / 2, self.center)
+		new_eps = res[0]
+		new_self = res[1]
+		return Point(int(new_self.x - new_eps), int(new_self.y + new_eps), int(new_self.z), homogeneous = True)
 
 	@property
 	def ne(self):
-		cureps = eps / 2
-		zeps = int(gethomo(cureps))
-		trueps = int(cureps * zeps)
-		m = gcd(self.z, zeps)
-		new_eps = trueps * (self.z // m)
-		new_self = self.center * (zeps // m)
-		return Point(int(new_self.x + new_eps), int(new_self.y + new_eps), int(new_self.z * (zeps // m)), homogeneous = True)
+		res = average(eps / 2, self.center)
+		new_eps = res[0]
+		new_self = res[1]
+		return Point(int(new_self.x + new_eps), int(new_self.y + new_eps), int(new_self.z), homogeneous = True)
 
 	@property
 	def sw(self):
-		cureps = eps / 2
-		zeps = int(gethomo(cureps))
-		trueps = int(cureps * zeps)
-		m = gcd(self.z, zeps)
-		new_eps = trueps * (self.z // m)
-		new_self = self.center * (zeps // m)
-		return Point(int(new_self.x - new_eps), int(new_self.y - new_eps), int(new_self.z * (zeps // m)), homogeneous = True)
+		res = average(eps / 2, self.center)
+		new_eps = res[0]
+		new_self = res[1]
+		return Point(int(new_self.x - new_eps), int(new_self.y - new_eps), int(new_self.z), homogeneous = True)
 
 	@property
 	def se(self):
-		cureps = eps / 2
-		zeps = int(gethomo(cureps))
-		trueps = int(cureps * zeps)
-		m = gcd(self.z, zeps)
-		new_eps = trueps * (self.z // m)
-		new_self = self.center * (zeps // m)
-		return Point(int(new_self.x + new_eps), int(new_self.y - new_eps), int(new_self.z * (zeps // m)), homogeneous = True)
+		res = average(eps / 2, self.center)
+		new_eps = res[0]
+		new_self = res[1]
+		return Point(int(new_self.x + new_eps), int(new_self.y - new_eps), int(new_self.z), homogeneous = True)
 
 
 class SweepLine:
@@ -403,7 +385,7 @@ class SweepLine:
 			Тип события
 			"""
 			SEG_END      = 0 # конец отрезка
-			SEG_START    = 1 # начало отрезка
+			SEG_START    = 6 # начало отрезка
 			SEG_SEG      = 2 # пересечение двух отрезков
 			SEG_PIX      = 3 # пересечение отрезка с границей пикселя
 			PIX_END      = 4 # конец пикселя
@@ -422,7 +404,6 @@ class SweepLine:
 			"""
 			self.etype = etype
 			self.point = normalize(point)
-			print("new point ", self.point)
 			self.segment = segment
 			self.pixel = pixel
 
@@ -444,9 +425,12 @@ class SweepLine:
 			:return: bool
 			"""
 			new_self, new_other = self.point.same_level(other.point)
-			if new_self[0] == new_other[0]:
-				return self.etype.value < other.etype.value	
-			return new_self[0] < new_other[0]
+			if self.point.x/self.point.z == other.point.x / other.point.z:
+				if self.etype.value == other.etype.value:
+					return self.point.y/self.point.z < other.point.y / other.point.z
+				else:
+					return self.etype.value < other.etype.value	
+			return self.point.x/self.point.z < other.point.x / other.point.z
 
 		def __str__(self):
 			s = 'type: {}\npoint: {}'.format(self.etype.name, self.point)
@@ -504,36 +488,38 @@ class SweepLine:
 		:param segment: экземпляр Segment
 		:param point: экземпляр Point
 		"""
-		print("-----", segment)
 		self.status.append(segment)
 		self.status.sort(key=lambda seg: seg.atX(self.xpos))
+		"""print("hey")
+		for q in self.status:
+			print(q)
+		print("__events__")
+		for q in self.events:
+			print("! ", q.etype, " ", q.point)
+		print("__________")"""
 		i = self.status.index(segment)
-		for seg in self.status:
-			print(seg)
-		print("--endstatus--")
-		for eve in self.events:
-			print(eve.etype, " ", eve.point)
-		print("--endevents--")
 		j = i
 		while (j > 0):
 			if (self.status[i].atX(self.xpos) == self.status[j - 1].atX(self.xpos)):
 				j -= 1
 				continue
 			p = segment.intersects(self.status[j - 1])
-			print("intersection of ", segment, " and ", self.status[j - 1], " is ", p)
 			if p is not None and (p.x / p.z >= self.xpos):
 				self.push(SweepLine.Event(SweepLine.Event.Type.SEG_SEG, p))
-			break
+				j -= 1
+			else:
+				break
 		j = i
 		while (j < len(self.status) - 1):
 			if (self.status[i].atX(self.xpos) == self.status[j + 1].atX(self.xpos)):
 				j += 1
 				continue
 			p = segment.intersects(self.status[j + 1])
-			print("intersection of ", segment, " and ", self.status[j + 1], " is ", p)
 			if p is not None and (p.x / p.z >= self.xpos):
 				self.push(SweepLine.Event(SweepLine.Event.Type.SEG_SEG, p))
-			break
+				j += 1
+			else:
+				break
 
 	def remove(self, segment):
 		"""
@@ -542,7 +528,7 @@ class SweepLine:
 		:param segment: экземпляр Segment
 		"""
 		if segment in self.status:
-			self.status.remove(segment)
+			self.status.remove(Segment(segment.start, segment.end))
 
 	def push(self, event):
 		"""

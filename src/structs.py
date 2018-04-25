@@ -37,14 +37,10 @@ def point_inside(pixel, segment):
 	return tmp[0]
 
 def add_pixel_to_seg(pixel, segment):
-	if (segment in pixelspassed) and (pixelspassed[segment] != None):
-		tmp = pixelspassed[segment]
-		pixelspassed.pop(segment)
-		tmp.append((point_inside(pixel, segment), pixel.center))
-		pixelspassed[segment] = tmp
+	if (segment in pixelspassed):
+		pixelspassed[segment].append((point_inside(pixel, segment), pixel.center))
 	else:
 		pixelspassed[segment] = [(point_inside(pixel, segment), pixel.center)]
-
 
 def get_pixel(a):
 	na = rounded(a)

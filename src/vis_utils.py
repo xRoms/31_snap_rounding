@@ -27,7 +27,7 @@ def _type_color(e):
 	if e.etype == SL.Event.Type.SEG_REINSERT:
 		return '<r'
 
-def draw_all(segments, status, events, hot, current):
+def draw_all(segments, status, events, hot, current, yasegments):
 	bound = 10
 	ax_min, ax_max = 0 - eps / 2, bound + eps / 2 
 	fig = plt.figure(figsize=(8,8))
@@ -40,10 +40,8 @@ def draw_all(segments, status, events, hot, current):
 	ax.grid(which='major', alpha=0.0)
 
 	seg_col = []
-	#print("statuss")
 	for s in status:
 		seg_col.append('green')
-	#	print(s)
 	seg_src = list(map(lambda seg: [(seg.start.x / seg.start.z, seg.start.y / seg.start.z), (seg.end.x / seg.end.z, seg.end.y / seg.end.z)], status))
 	ax.add_collection(mc.LineCollection(seg_src, colors=seg_col))
 
@@ -74,8 +72,8 @@ def draw_all(segments, status, events, hot, current):
 	# plt.show()
 	return fig
 
-def visual_dump_pieces(xpos, status, segments, hot, current, filename):	
-	fig = draw_all(segments, status, line.events, hot, current)
+def visual_dump_pieces(xpos, status, segments, hot, current, yasegments, filename):	
+	fig = draw_all(segments, status, line.events, hot, current, yasegments)
 	if xpos is not None:
 		plt.axvline(xpos, ymin=0.05, ymax=0.95, color='black', linestyle='dashed')
 	plt.savefig(filename)

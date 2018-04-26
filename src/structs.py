@@ -2,18 +2,28 @@ from __future__ import print_function
 import sys
 import numpy as np
 from enum import Enum
-from sortedcontainers import SortedList
+from sortedcontainers import SortedListWithKey, SortedDict
 import heapq
 from numpy.linalg import det
 from utils import bound
 from cg import Point, turn
 from cg.utils import gcd
+from collections import deque
+from blist import blist
 
 from utils import eps, handlers
 
 pixels = {}
 
+segsinstatus = {}
+
+
+
 pixelspassed = {}
+
+
+def add_inter(point, a, b, deque_inter, msg):
+	deque_inter.add((point, a, b))
 
 def average(ceps, point):
 	zeps = int(gethomo(ceps))
@@ -37,10 +47,11 @@ def point_inside(pixel, segment):
 	return tmp[0]
 
 def add_pixel_to_seg(pixel, segment):
-	if (segment in pixelspassed):
+	if (segment in pixelspassed) and (pixelspassed[segment] != None):
 		pixelspassed[segment].append((point_inside(pixel, segment), pixel.center))
 	else:
 		pixelspassed[segment] = [(point_inside(pixel, segment), pixel.center)]
+
 
 def get_pixel(a):
 	na = rounded(a)
@@ -85,7 +96,7 @@ class Segment:
 	Класс отрезка
 	"""
 
-	def __init__(self, a, b):
+	def __init__(self, a, b, isbound=0):
 		"""
 		Конструктор отрезка
 
@@ -93,6 +104,7 @@ class Segment:
 		"""
 		self.start = normalize(min(a, b))
 		self.end = normalize(max(a, b))
+		self.isbound = isbound
 
 	def __eq__(self, other):
 		"""
@@ -112,9 +124,10 @@ class Segment:
 		dx = x - sx
 		sy = self.start.y / self.start.z
 		ey = self.end.y / self.end.z - sy
+		sy += self.isbound * 0.00001
 		if (dx > ex):
-			return sy
-		return dx/ex * ey + sy
+			return round(sy, 6)
+		return round(dx/ex * ey + sy, 6)
 
 	def intersects(self, other):
 		"""
@@ -123,8 +136,11 @@ class Segment:
 		:param other: экземпляр Segment
 		:return: Point точка пересечения или None, если пересечения нет
 		"""
+
 		a, b = normalize(self.start), normalize(self.end)
 		c, d = normalize(other.start), normalize(other.end)
+		if (a == c) and (b == d):
+			return None
 		acd, bcd = turn(a, c, d), turn(b, c, d)
 		cab, dab = turn(c, a, b), turn(d, a, b)
 
@@ -181,6 +197,9 @@ class Pixel:
 		:param point: экземпляр Point, точка внутри пикселя
 		"""
 		self.center = rounded(point)
+		self.lower = []
+		self.upper = []
+		self.segs = []
 
 	def __eq__(self, other):
 		"""
@@ -202,7 +221,7 @@ class Pixel:
 
 		:return: Segment
 		"""
-		return Segment(self.nw, self.ne)
+		return Segment(self.nw, self.ne, isbound = -1)
 	
 	def bottom(self):
 		"""
@@ -210,7 +229,7 @@ class Pixel:
 
 		:return: Segment
 		"""
-		return Segment(self.sw, self.se)
+		return Segment(self.sw, self.se, isbound = 1)
 
 	def left(self):
 		"""
@@ -285,25 +304,25 @@ class Pixel:
 
 		return xpoint == xself + cureps
 
-	def get_top_neighbour(self, point):
+	def get_top_neighbour(self):
 		res = average(eps, self.center)
 		new_eps = res[0]
 		new_self = res[1]
 		return get_pixel(Point(int(new_self.x), int(new_self.y + new_eps), int(new_self.z), homogeneous = True))
 
-	def get_bottom_neighbour(self, point):
+	def get_bottom_neighbour(self):
 		res = average(eps, self.center)
 		new_eps = res[0]
 		new_self = res[1]
 		return get_pixel(Point(int(new_self.x), int(new_self.y - new_eps), int(new_self.z), homogeneous = True))
 
-	def get_left_neighbour(self, point):
+	def get_left_neighbour(self):
 		res = average(eps, self.center)
 		new_eps = res[0]
 		new_self = res[1]
 		return get_pixel(Point(int(new_self.x - new_eps), int(new_self.y), int(new_self.z), homogeneous = True))
 
-	def get_right_neighbour(self, point):
+	def get_right_neighbour(self):
 		res = average(eps, self.center)
 		new_eps = res[0]
 		new_self = res[1]
@@ -469,62 +488,100 @@ class SweepLine:
 		:param segments: список отрезков Segment, для работы с которыми строится заметающая прямая
 		"""
 		self.xpos = 0
-		self.status = [] # SortedList(key=lambda seg: seg.atX(self.xpos))
+		self.status = blist()
+		self.yasegments = blist()
 		self.events = []
+		self.intersections_status = SortedListWithKey(key = lambda xnpair: xnpair[0])
+		self.intersections_segments = SortedListWithKey(key = lambda xnpair: xnpair[0])
 
 		# инициализируем список событий началами и концами отрезков
 		for s in segments:
 			self.push(SweepLine.Event(SweepLine.Event.Type.SEG_START, s.start, segment=s))
 			self.push(SweepLine.Event(SweepLine.Event.Type.SEG_END, s.end, segment=s))
 
-	def insert(self, segment):
+	def bsearch(self, listt, segment):
+		r = len(listt) - 1
+		if (r == -1):
+			return 0
+		searchX = segment.atX(self.xpos) + 0.00002
+		hiddenX = searchX - 0.00004
+		l = -1
+		while (r - l > 1):
+			m = (r + l) // 2
+			if (listt[m].atX(self.xpos) > searchX):
+				r = m
+			else:
+				l = m
+		while (r in range(0, len(listt))) and (listt[r].atX(self.xpos) <= searchX):
+			r += 1
+		q = r 
+		while ((q - 1) in range(0, len(listt))) and (listt[q - 1].atX(self.xpos) >= hiddenX) and ((listt[q - 1] != segment) or (listt[q - 1].isbound != segment.isbound)):
+			q -= 1
+		if ((q - 1) in range(0, len(listt))) and (listt[q - 1] == segment and listt[q - 1].isbound == segment.isbound):
+			return q
+		return r
+
+	def sort_intersection(self, listt, deque_inter):
+		pair = deque_inter.pop(0)
+		a = pair[1]
+		b = pair[2]
+		ia = self.bsearch(listt, a) - 1
+		ib = self.bsearch(listt, b) - 1
+		position = min(a.end.x / a.end.z, b.end.x / b.end.z)
+		if (ia < ib and a.atX(position) > b.atX(position)) or (ia > ib and a.atX(position) < b.atX(position)):
+			listt.pop(ia)
+			listt.insert(ia, b)
+			listt.pop(ib)
+			listt.insert(ib, a)
+
+
+	def insert(self, listt, segment, deque_inter, shouldpush, msg):
 		"""
 		добавляет отрезок в статус, а также вычисляет новые пересечения и добавляет их в очередь events
 
 		:param segment: экземпляр Segment
 		:param point: экземпляр Point
 		"""
-		self.status.append(segment)
-		self.status.sort(key=lambda seg: seg.atX(self.xpos))
-		"""print("hey")
-		for q in self.status:
-			print(q)
-		print("__events__")
-		for q in self.events:
-			print("! ", q.etype, " ", q.point)
-		print("__________")"""
-		i = self.status.index(segment)
+		i = self.bsearch(listt, segment)
+		if (i in range(1, len(listt)) and listt[i - 1] == segment):
+			i -= 1
+		else:
+			listt.insert(i, segment)
 		j = i
 		while (j > 0):
-			if (self.status[i].atX(self.xpos) == self.status[j - 1].atX(self.xpos)):
-				j -= 1
-				continue
-			p = segment.intersects(self.status[j - 1])
+			p = segment.intersects(listt[j - 1])
 			if p is not None and (p.x / p.z >= self.xpos):
-				self.push(SweepLine.Event(SweepLine.Event.Type.SEG_SEG, p))
+				if (shouldpush):
+					self.push(SweepLine.Event(SweepLine.Event.Type.SEG_SEG, p))
+				add_inter(p, listt[i], listt[j - 1], deque_inter, msg)
 				j -= 1
 			else:
 				break
 		j = i
-		while (j < len(self.status) - 1):
-			if (self.status[i].atX(self.xpos) == self.status[j + 1].atX(self.xpos)):
-				j += 1
-				continue
-			p = segment.intersects(self.status[j + 1])
+		while (j < len(listt) - 1):
+			p = segment.intersects(listt[j + 1])
 			if p is not None and (p.x / p.z >= self.xpos):
-				self.push(SweepLine.Event(SweepLine.Event.Type.SEG_SEG, p))
+				if (shouldpush) :
+					self.push(SweepLine.Event(SweepLine.Event.Type.SEG_SEG, p))
+				add_inter(p, listt[i], listt[j + 1], deque_inter, msg)
 				j += 1
 			else:
 				break
 
-	def remove(self, segment):
+	def remove(self, listt, segment):
 		"""
 		удаляет отрезок из статуса
 
 		:param segment: экземпляр Segment
 		"""
-		if segment in self.status:
-			self.status.remove(Segment(segment.start, segment.end))
+		i = self.bsearch(listt, segment)
+		while (i in range (0, len(listt)) and listt[i] == segment and listt[i].isbound == segment.isbound):
+			listt.pop(i)
+			i -= 1
+		i -= 1
+		while (i in range (0, len(listt)) and listt[i] == segment and listt[i].isbound == segment.isbound):
+			listt.pop(i)
+			i -= 1
 
 	def push(self, event):
 		"""

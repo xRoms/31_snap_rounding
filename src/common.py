@@ -1,10 +1,11 @@
-from sortedcontainers import SortedList
+from sortedcontainers import SortedListWithKey
 from utils import bound
 from random import uniform
 from structs import rounded, Point, Pixel, Segment, SweepLine as SL, mkpoint
 import numpy as np
 
 segments = []
+
 
 def generate_segs(n, seed = None):
 	if (seed is not None):
@@ -23,5 +24,5 @@ for q in segments:
 	print(q.start, " ", q.end)
 
 hot = []
-current = SortedList()
+current = SortedListWithKey(key=lambda pix: pix.center.y)
 line = SL(segments)

@@ -5,34 +5,44 @@ from enum import Enum
 from sortedcontainers import SortedListWithKey, SortedDict
 import heapq
 from numpy.linalg import det
-from utils import bound
+from utils import bound, eps, handlers
 from cg import Point, turn
 from cg.utils import gcd
 from collections import deque
 from blist import blist
 
-from utils import eps, handlers
-
 pixels = {}
 
 segsinstatus = {}
 
-
-
 pixelspassed = {}
 
-
-def add_inter(point, a, b, deque_inter, msg):
-	deque_inter.add((point, a, b))
-
 def average(ceps, point):
-	zeps = int(gethomo(ceps))
+	"""
+	приводит данную точность и точку на "один уровень" однородных координат 
+
+	:param ceps: float
+	:param point: экземпляр Point
+	:return: (int, Point)
+	"""
+
+	zeps = 1
+	while (((zeps * ceps)%1 != 0)):
+		zeps *= 10
 	m = gcd(point.z, zeps)
 	new_eps = int(zeps * ceps * (point.z // m))
 	new_point = Point(int(point.x * (zeps // m)), int(point.y * (zeps // m)), int(point.z * (zeps // m)), homogeneous=True)
 	return (new_eps, new_point)
 
 def point_inside(pixel, segment):
+	"""
+	возвращает точку, принадлежащую segment, находящуюся внутри pixel
+
+	:param pixel: экземпляр Pixel 
+	:param segment: экземпляр Segment
+	:return: экземпляр Point
+	"""
+
 	tmp = []
 	cnt = 0
 	for q in segment.intersections(pixel):
@@ -47,6 +57,13 @@ def point_inside(pixel, segment):
 	return tmp[0]
 
 def add_pixel_to_seg(pixel, segment):
+	"""
+	добавляет запись, что segment пересекает pixel в pixelpassed
+
+	:param pixel: экземпляр Pixel
+	:param segment: экземпляр Segment
+	"""
+
 	if (segment in pixelspassed) and (pixelspassed[segment] != None):
 		pixelspassed[segment].append((point_inside(pixel, segment), pixel.center))
 	else:
@@ -54,12 +71,26 @@ def add_pixel_to_seg(pixel, segment):
 
 
 def get_pixel(a):
+	"""
+	возвращает экземпляр Pixel по точке в нем
+
+	:param a: экземпляр Point
+	:return: экземпляр Pixel
+	"""
+
 	na = rounded(a)
 	if (na not in pixels):
 		pixels[na] = Pixel(na)
 	return pixels[na]
 
 def smart_gcd(a, b):
+	"""
+	наименьший общий делитель, игнорирующий нули
+
+	:param a, b: int
+	:return: int
+	"""
+
 	if a == 0:
 		return b
 	if b == 0:
@@ -67,29 +98,18 @@ def smart_gcd(a, b):
 	return gcd(a, b)
 
 def normalize(smth):
+	"""
+	возвращает точку с упрощенными однородными координатами
+
+	:param smth: экземпляр Point
+	:return: экземпляр Point
+	"""
+	
 	m = smart_gcd(smth.x, smart_gcd(smth.y, smth.z))
 	q = 1
 	if (smth.z <= 0):
 		q = 1
 	return Point(int(q * (smth.x // m)), int(q * (smth.y // m)), int(q * (smth.z // m)), homogeneous=True)
-
-#def eprint(*args, **kwargs):
-#    print(*args, file=sys.stderr, **kwargs)
-
-def vol(point, *hyperplane):
-	return det(np.array([pt.coord for pt in hyperplane] + [point.coord]))
-
-def gethomo(a):
-	if (isinstance(a, int)):
-		return 1
-	c = 1
-	while (((c * a)%1 != 0)):
-		c *= 10
-	return c
-
-def mkpoint(a, b):
-	c = max(gethomo(a), gethomo(b))
-	return Point(np.array([int(a * c), int(b * c), int(c)]), homogeneous=True)
 
 class Segment:
 	"""
@@ -101,7 +121,9 @@ class Segment:
 		Конструктор отрезка
 
 		:param a, b: концы отрезка, экземпляры Point
+		:param isbound: является ли отрезок верхней (-1), нижней (1) границей или же нет (0)
 		"""
+
 		self.start = normalize(min(a, b))
 		self.end = normalize(max(a, b))
 		self.isbound = isbound
@@ -113,12 +135,25 @@ class Segment:
 		:param other: экземпляр Segment
 		:return: bool
 		"""
+
 		return self.start == other.start and self.end == other.end		
 
 	def __hash__(self):
+
+		"""
+		хэш отрезка
+		"""
+
 		return hash((self.start.x, self.start.y, self.start.z, self.end.x, self.end.y, self.end.z))
 
 	def atX(self, x):
+		"""
+		вычисляет y координату отрезка при данном x
+
+		:param x: экземпляр Segment
+		:return: числовое значение
+		"""
+
 		sx = self.start.x / self.start.z
 		ex = self.end.x / self.end.z - sx
 		dx = x - sx
@@ -131,7 +166,7 @@ class Segment:
 
 	def intersects(self, other):
 		"""
-		пересечение отрезка с другим отрезком или с границами пикселя
+		пересечение отрезка с другим отрезком
 
 		:param other: экземпляр Segment
 		:return: Point точка пересечения или None, если пересечения нет
@@ -159,7 +194,13 @@ class Segment:
 		return None
 
 	def intersections(self, pixel):
-		return  [self.intersects(pixel.right()), self.intersects(pixel.bottom()), self.intersects(pixel.top()), self.intersects(pixel.left())]
+		"""
+		возвращает список пересечений отрезка с каждой стороной пикселя
+
+		:param pixel: экземпляр Pixel
+		"""
+
+		return [self.intersects(pixel.right()), self.intersects(pixel.bottom()), self.intersects(pixel.top()), self.intersects(pixel.left())]
 
 	def __str__(self):
 		return '({}, {})'.format(self.start, self.end)
@@ -179,6 +220,13 @@ def rounded(point):
 
 
 def halfround(a, new_eps):
+	"""
+	округляет число с определенной точностью
+
+	:param a: числовое значение
+	:param new_eps: числовое значение
+	:return: числовое значение 
+	"""
 	if (a % new_eps <= new_eps / 2): 
 		return a - a % new_eps
 	else:
@@ -196,6 +244,7 @@ class Pixel:
 
 		:param point: экземпляр Point, точка внутри пикселя
 		"""
+
 		self.center = rounded(point)
 		self.lower = []
 		self.upper = []
@@ -208,9 +257,17 @@ class Pixel:
 		:param other: экземпляр Pixel
 		:return: bool
 		"""
+
 		return self.center == other.center
 
 	def __lt__(self, other):
+		"""
+		проверяет меньше ли один пиксель другого
+
+		:param other: экземпляр Pixel
+		:return: bool
+		"""
+
 		return self.center < other.center
 
 	
@@ -219,32 +276,36 @@ class Pixel:
 		"""
 		возвращает отрезок, соответствующий верхней грани пикселя
 
-		:return: Segment
+		:return: экземпляр Segment
 		"""
+
 		return Segment(self.nw, self.ne, isbound = -1)
 	
 	def bottom(self):
 		"""
 		возвращает отрезок, соответствующий нижней грани пикселя
 
-		:return: Segment
+		:return: экземпляр Segment
 		"""
+
 		return Segment(self.sw, self.se, isbound = 1)
 
 	def left(self):
 		"""
 		возвращает отрезок, соответствующий левой грани пикселя
 
-		:return: Segment
+		:return: экземпляр Segment
 		"""
+
 		return Segment(self.nw, self.sw)
 
 	def right(self):
 		"""
 		возвращает отрезок, соответствующий правой грани пикселя
 
-		:return: Segment
+		:return: экземпляр Segment
 		"""
+
 		return Segment(self.ne, self.se)
 
 	def is_on_top(self, point):
@@ -254,6 +315,7 @@ class Pixel:
 		:param point: экземпляр Point
 		:return: bool
 		"""
+
 		new_self, new_point = self.center.same_level(point)
 		yself = new_self[1]
 		ypoint = new_point[1]
@@ -268,6 +330,7 @@ class Pixel:
 		:param point: экземпляр Point
 		:return: bool
 		"""
+
 		new_self, new_point = self.center.same_level(point)
 		yself = new_self[1]
 		ypoint = new_point[1]
@@ -283,6 +346,7 @@ class Pixel:
 		:param point: экземпляр Point
 		:return: bool
 		"""
+
 		new_self, new_point = self.center.same_level(point)
 		xself = new_self[0]
 		xpoint = new_point[0]
@@ -297,6 +361,7 @@ class Pixel:
 		:param point: экземпляр Point
 		:return: bool
 		"""
+
 		new_self, new_point = self.center.same_level(point)
 		xself = new_self[0]
 		xpoint = new_point[0]
@@ -305,24 +370,48 @@ class Pixel:
 		return xpoint == xself + cureps
 
 	def get_top_neighbour(self):
+		"""
+		возвращает пиксель, смежный по верхней границе
+
+		:return: экземпляр Pixel
+		"""
+
 		res = average(eps, self.center)
 		new_eps = res[0]
 		new_self = res[1]
 		return get_pixel(Point(int(new_self.x), int(new_self.y + new_eps), int(new_self.z), homogeneous = True))
 
 	def get_bottom_neighbour(self):
+		"""
+		возвращает пиксель, смежный по нижней границе
+
+		:return: экземпляр Pixel
+		"""
+
 		res = average(eps, self.center)
 		new_eps = res[0]
 		new_self = res[1]
 		return get_pixel(Point(int(new_self.x), int(new_self.y - new_eps), int(new_self.z), homogeneous = True))
 
 	def get_left_neighbour(self):
+		"""
+		возвращает пиксель, смежный по левой границе
+
+		:return: экземпляр Pixel
+		"""
+
 		res = average(eps, self.center)
 		new_eps = res[0]
 		new_self = res[1]
 		return get_pixel(Point(int(new_self.x - new_eps), int(new_self.y), int(new_self.z), homogeneous = True))
 
 	def get_right_neighbour(self):
+		"""
+		возвращает пиксель, смежный по правой границе
+
+		:return: экземпляр Pixel
+		"""
+
 		res = average(eps, self.center)
 		new_eps = res[0]
 		new_self = res[1]
@@ -335,6 +424,7 @@ class Pixel:
 		:param point: экземпляр Point
 		:return: Pixel смежный пиксель
 		"""	
+
 		res = average(eps, self.center)
 		new_eps = res[0]
 		new_self = res[1]
@@ -391,14 +481,17 @@ class SweepLine:
 	"""
 	Класс заметающей прямой
 	"""
+
 	class Event:
 		"""
 		Класс события, обрабатываемого заметающей прямой
 		"""
+
 		class Type(Enum):
 			"""
 			Тип события
 			"""
+
 			SEG_END      = 0 # конец отрезка
 			SEG_START    = 6 # начало отрезка
 			SEG_SEG      = 2 # пересечение двух отрезков
@@ -406,8 +499,7 @@ class SweepLine:
 			PIX_END      = 4 # конец пикселя
 			SEG_REINSERT = 5 # повторное вхождение отрезка после выхода из пикселя
 
-
-		def __init__(self, etype, point, segment=None, pixel=None):
+		def __init__(self, etype, point, segment=None, pixel=None, isstatus=None):
 			"""
 			Конструктор события
 
@@ -416,11 +508,14 @@ class SweepLine:
 			:param segment: Segment для событий типа SEG_START, SEG_END, SEG_PIX, SEG_REINSERT \
 			                -- отрезок, участвующий в них
 			:param pixel: Pixel для событий типа SEG_PIX, PIX_END -- пиксель, участвующий в них
+			:param isstatus: Происходит ли событие в массиве status или yasegments
 			"""
+
 			self.etype = etype
 			self.point = normalize(point)
 			self.segment = segment
 			self.pixel = pixel
+			self.isstatus = isstatus
 
 		def __eq__(self, other):
 			"""
@@ -429,6 +524,7 @@ class SweepLine:
 			:param other: экземпляр SweepLine.Event 
 			:return: bool
 			"""
+
 			return self.point == other.point and self.etype == other.etype \
 			and self.segment == other.segment and self.pixel == other.pixel
 
@@ -439,6 +535,7 @@ class SweepLine:
 			:param other: экземпляр SweepLine.Event
 			:return: bool
 			"""
+
 			new_self, new_other = self.point.same_level(other.point)
 			if self.point.x/self.point.z == other.point.x / other.point.z:
 				if self.etype.value == other.etype.value:
@@ -459,6 +556,7 @@ class SweepLine:
 			"""
 			вызывает функцию-обработчик для события данного типа
 			"""
+
 			handler = handlers[self.etype]
 			if self.segment is not None and self.pixel is not None:
 				handler(self.point, segment=self.segment, pixel=self.pixel)
@@ -467,7 +565,7 @@ class SweepLine:
 			elif self.pixel is not None:
 				handler(self.point, pixel=self.pixel)
 			else:
-				handler(self.point)
+				handler(self.point, isstatus=self.isstatus)
 
 		@property
 		def x(self):
@@ -487,11 +585,23 @@ class SweepLine:
 
 		:param segments: список отрезков Segment, для работы с которыми строится заметающая прямая
 		"""
+
+		#текущий x
 		self.xpos = 0
+
+		#массив вспомогательных отрезков, отсортированный по y координате при текущем x
 		self.status = blist()
+
+		#массив отрезков, пересекающих текущий x, отсортированный по y координате точки пересечения
 		self.yasegments = blist()
+
+		#массив событий
 		self.events = []
+
+		#массив пересечений отрезков из status, отсортированный по x
 		self.intersections_status = SortedListWithKey(key = lambda xnpair: xnpair[0])
+		
+		#массив пересечений отрезков из yasegments, отсортированный по x
 		self.intersections_segments = SortedListWithKey(key = lambda xnpair: xnpair[0])
 
 		# инициализируем список событий началами и концами отрезков
@@ -500,6 +610,14 @@ class SweepLine:
 			self.push(SweepLine.Event(SweepLine.Event.Type.SEG_END, s.end, segment=s))
 
 	def bsearch(self, listt, segment):
+		"""
+		бинарный поиск, находит первый элемент больший данного
+
+		:param listt: массив для поиска
+		:param segment: экземпляр Segment
+		:return: int
+		"""
+
 		r = len(listt) - 1
 		if (r == -1):
 			return 0
@@ -534,54 +652,58 @@ class SweepLine:
 			listt.pop(ib)
 			listt.insert(ib, a)
 
+	def find_intersections(self, listt, segment, start, delta, deque_inter, isstatus, msg):
+		j = start
+		while (j + delta in range(0, len(listt))):
+			p = segment.intersects(listt[j + delta])
+			if p is not None and (p.x / p.z >= self.xpos):
+				self.push(SweepLine.Event(SweepLine.Event.Type.SEG_SEG, p, isstatus=isstatus))
+				deque_inter.add((p, segment, listt[j + delta]))
+				j += delta
+			else:
+				break
 
-	def insert(self, listt, segment, deque_inter, shouldpush, msg):
+	def insert(self, listt, segment, deque_inter, isstatus, msg):
 		"""
-		добавляет отрезок в статус, а также вычисляет новые пересечения и добавляет их в очередь events
+		добавляет отрезок segment в массив listt, также вычисляет новые пересечения и добавляет их в очередь deque_inter
 
+		:param listt: массив
 		:param segment: экземпляр Segment
-		:param point: экземпляр Point
+		:param deque_inter: массив 
+		:param isstatus: bool
+		:param msg: string
 		"""
+
 		i = self.bsearch(listt, segment)
-		if (i in range(1, len(listt)) and listt[i - 1] == segment):
+		if (i in range(1, len(listt) + 1) and listt[i - 1] == segment):
 			i -= 1
 		else:
 			listt.insert(i, segment)
-		j = i
-		while (j > 0):
-			p = segment.intersects(listt[j - 1])
-			if p is not None and (p.x / p.z >= self.xpos):
-				if (shouldpush):
-					self.push(SweepLine.Event(SweepLine.Event.Type.SEG_SEG, p))
-				add_inter(p, listt[i], listt[j - 1], deque_inter, msg)
-				j -= 1
-			else:
-				break
-		j = i
-		while (j < len(listt) - 1):
-			p = segment.intersects(listt[j + 1])
-			if p is not None and (p.x / p.z >= self.xpos):
-				if (shouldpush) :
-					self.push(SweepLine.Event(SweepLine.Event.Type.SEG_SEG, p))
-				add_inter(p, listt[i], listt[j + 1], deque_inter, msg)
-				j += 1
-			else:
-				break
+		self.find_intersections(listt, segment, i, -1, deque_inter, isstatus, msg)
+		self.find_intersections(listt, segment, i, +1, deque_inter, isstatus, msg)
 
-	def remove(self, listt, segment):
+	def remove(self, listt, segment, deque_inter, isstatus, msg):
 		"""
-		удаляет отрезок из статуса
+		удаляет отрезок segment из массива listt, также вычисляет новые пересечения и добавляет их в очередь deque_inter
 
+		:param listt: массив
 		:param segment: экземпляр Segment
+		:param deque_inter: массив 
+		:param isstatus: bool
+		:param msg: string
 		"""
-		i = self.bsearch(listt, segment)
+
+		i = self.bsearch(listt, segment) - 1
 		while (i in range (0, len(listt)) and listt[i] == segment and listt[i].isbound == segment.isbound):
 			listt.pop(i)
 			i -= 1
-		i -= 1
-		while (i in range (0, len(listt)) and listt[i] == segment and listt[i].isbound == segment.isbound):
-			listt.pop(i)
-			i -= 1
+		if (i == -1):
+			return
+		self.find_intersections(listt, listt[i], i, +1, deque_inter, isstatus, msg)
+		if (i == len(listt) - 1):
+			return
+		self.find_intersections(listt, listt[i + 1], i + 1, -1, deque_inter, isstatus, msg)
+
 
 	def push(self, event):
 		"""
@@ -589,6 +711,7 @@ class SweepLine:
 
 		:param event: экземпляр SweepLine.Event
 		"""
+
 		heapq.heappush(self.events, event)
 
 	def peek(self):
@@ -597,6 +720,7 @@ class SweepLine:
 
 		:return: SweepLine.Event
 		"""
+
 		return self.events[0]
 
 	def pop(self):
@@ -605,4 +729,5 @@ class SweepLine:
 
 		:return: SweepLine.Event
 		"""
+
 		return heapq.heappop(self.events)

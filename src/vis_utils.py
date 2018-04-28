@@ -28,7 +28,6 @@ def _type_color(e):
 		return '<r'
 
 def draw_all(segments, status, events, hot, current, yasegments):
-	bound = 10
 	ax_min, ax_max = 0 - eps / 2, bound + eps / 2 
 	fig = plt.figure(figsize=(8,8))
 	ax = fig.add_subplot(111, aspect='equal')
@@ -146,7 +145,6 @@ def SlideShower(folder, frame_duration=800):
 	return box
 
 def draw_result(segments, hot):
-	bound = 10
 	ax_min, ax_max = 0 - eps / 2, bound + eps / 2 
 	fig = plt.figure(figsize=(8,8))
 	ax = fig.add_subplot(111, aspect='equal')

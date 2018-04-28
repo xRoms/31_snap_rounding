@@ -6,8 +6,8 @@ from answers import *
 def segment_endpoint(point, segment):
 	segment_endpoint_answer(point, segment)
 
-def segseg_intersection(point):
-	segseg_intersection_answer(point)
+def segseg_intersection(point, isstatus):
+	segseg_intersection_answer(point, isstatus)
 
 def segpix_intersection(point, segment, pixel):
 	segpix_intersection_answer(point, segment, pixel)

@@ -4,7 +4,7 @@ from random import uniform
 from structs import rounded, Point, Pixel, Segment, SweepLine as SL
 import numpy as np
 
-segments = []
+starting_segments = []
 
 hot = []
 
@@ -17,13 +17,13 @@ def generate_segs(n, seed = None):
 		q, w= rand(), rand()
 		while q == w:
 			w = rand()
-		segments.append(Segment(Point(q, rand(), 5, homogeneous=True), Point(w, rand(), 5, homogeneous=True)))
+		starting_segments.append(Segment(Point(q, rand(), 5, homogeneous=True), Point(w, rand(), 5, homogeneous=True)))
 
 generate_segs(number_of_segments, seed)
 
-for q in segments:
+for q in starting_segments:
 	print(q.start, " ", q.end)
 
 current = SortedListWithKey(key=lambda pix: pix.center.y)
 
-line = SL(segments)
+line = SL(starting_segments)

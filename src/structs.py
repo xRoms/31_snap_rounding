@@ -104,7 +104,7 @@ def normalize(smth):
 	:param smth: экземпляр Point
 	:return: экземпляр Point
 	"""
-	
+
 	m = smart_gcd(smth.x, smart_gcd(smth.y, smth.z))
 	q = 1
 	if (smth.z <= 0):
@@ -508,7 +508,7 @@ class SweepLine:
 			:param segment: Segment для событий типа SEG_START, SEG_END, SEG_PIX, SEG_REINSERT \
 			                -- отрезок, участвующий в них
 			:param pixel: Pixel для событий типа SEG_PIX, PIX_END -- пиксель, участвующий в них
-			:param isstatus: Происходит ли событие в массиве status или yasegments
+			:param isstatus: Происходит ли событие в массиве status или segments
 			"""
 
 			self.etype = etype
@@ -593,7 +593,7 @@ class SweepLine:
 		self.status = blist()
 
 		#массив отрезков, пересекающих текущий x, отсортированный по y координате точки пересечения
-		self.yasegments = blist()
+		self.segments = blist()
 
 		#массив событий
 		self.events = []
@@ -601,7 +601,7 @@ class SweepLine:
 		#массив пересечений отрезков из status, отсортированный по x
 		self.intersections_status = SortedListWithKey(key = lambda xnpair: xnpair[0])
 		
-		#массив пересечений отрезков из yasegments, отсортированный по x
+		#массив пересечений отрезков из segments, отсортированный по x
 		self.intersections_segments = SortedListWithKey(key = lambda xnpair: xnpair[0])
 
 		# инициализируем список событий началами и концами отрезков
@@ -640,6 +640,13 @@ class SweepLine:
 		return r
 
 	def sort_intersection(self, listt, deque_inter):
+		"""
+		обрабатывает пересечения отрезков для поддержания сортированности
+
+		:param listt: массив отрезков
+		:param deque_inter: массив пересечений
+		"""
+
 		pair = deque_inter.pop(0)
 		a = pair[1]
 		b = pair[2]
@@ -653,6 +660,18 @@ class SweepLine:
 			listt.insert(ib, a)
 
 	def find_intersections(self, listt, segment, start, delta, deque_inter, isstatus, msg):
+		"""
+		находит все пересечения отрезка segment с отрезками в массиве listt начиная с индекса start и шагом delta
+
+		:param listt: массив отрезков
+		:param segment: экземпляр Segment
+		:param start: int
+		:param delta: int
+		:param deque_inter: массив пересечений
+		:param isstatus: bool
+		:param msg: string
+		"""
+
 		j = start
 		while (j + delta in range(0, len(listt))):
 			p = segment.intersects(listt[j + delta])

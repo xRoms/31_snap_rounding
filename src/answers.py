@@ -1,6 +1,6 @@
 from sortedcontainers import SortedListWithKey
 from structs import Segment, Pixel, SweepLine as SL, Point, normalize, get_pixel, add_pixel_to_seg
-from common import hot, current, line, segments
+from common import hot, current, line, starting_segments
 from collections import deque
 
 
@@ -24,7 +24,7 @@ def segment_endpoint_answer(point, segment):
 
 	# если событие -- начало отрезка
 	if point == segment.start:
-		line.insert(line.yasegments, segment, line.intersections_segments, isstatus=False, msg="segment")
+		line.insert(line.segments, segment, line.intersections_segments, isstatus=False, msg="segment")
 		add_pixel_to_seg(pixel, segment)
 		pixel.segs.append(segment)
 
@@ -37,13 +37,13 @@ def segment_endpoint_answer(point, segment):
 	# если событие -- конец отрезка
 	else:
 		line.remove(line.status, segment, line.intersections_status, isstatus=True, msg="status")
-		line.remove(line.yasegments, segment, line.intersections_segments, isstatus=False, msg="segment")
+		line.remove(line.segments, segment, line.intersections_segments, isstatus=False, msg="segment")
 
 def segseg_intersection_answer(point, isstatus):
 
-	# если пересечение отрезков из yasegments
+	# если пересечение отрезков из segments
 	if (not isstatus): 
-		line.sort_intersection(line.yasegments, line.intersections_segments)
+		line.sort_intersection(line.segments, line.intersections_segments)
 		return
 	pair = line.intersections_status[0]
 	line.sort_intersection(line.status, line.intersections_status)
@@ -79,7 +79,7 @@ def segpix_intersection_answer(point, segment, pixel):
 
 
 def segment_reinsertion_answer(point, segment, pixel):
-	line.insert(line.yasegments, segment, line.intersections_segments, isstatus=False, msg="segment")
+	line.insert(line.segments, segment, line.intersections_segments, isstatus=False, msg="segment")
 	line.insert(line.status, segment, line.intersections_status, isstatus=True, msg="status")
 	if pixel.is_on_top(point):
 		pixel.upper.append(segment)
@@ -124,19 +124,19 @@ def heat_answer(pixel):
 	
 	current.add(pixel)
 	
-	# найдем такой отрезок [li; hi] (индексы массива yasegments, отсортированного по y) что значения элементов находятся
+	# найдем такой отрезок [li; hi] (индексы массива segments, отсортированного по y) что значения элементов находятся
 	# между нижней границей верхнего пикселя и верхней границей нижнего
 	li = 0
 	if (lower is not None):
-		li = max(li, line.bsearch(line.yasegments, lower.top()))
-		while (li in range(1, len(line.yasegments)) and line.yasegments[li].atX(line.xpos) >= lower.top().atX(line.xpos)):
+		li = max(li, line.bsearch(line.segments, lower.top()))
+		while (li in range(1, len(line.segments)) and line.segments[li].atX(line.xpos) >= lower.top().atX(line.xpos)):
 			li -= 1
-	hi = len(line.yasegments)
+	hi = len(line.segments)
 	if (higher is not None):
-		hi = min(hi, line.bsearch(line.yasegments, higher.bottom()))
-		while (hi in range(0, len(line.yasegments)) and line.yasegments[hi].atX(line.xpos) <= higher.bottom().atX(line.xpos)):
+		hi = min(hi, line.bsearch(line.segments, higher.bottom()))
+		while (hi in range(0, len(line.segments)) and line.segments[hi].atX(line.xpos) <= higher.bottom().atX(line.xpos)):
 			hi += 1
-	extender = line.yasegments[li:hi]
+	extender = line.segments[li:hi]
 	maybegood.extend(extender)
 
 	# из всех возможных отрезков берем те, что пересекаются с пикселем и запоминаем это

@@ -5,7 +5,7 @@ from enum import Enum
 from sortedcontainers import SortedListWithKey, SortedDict
 import heapq
 from numpy.linalg import det
-from utils import bound, eps, handlers
+from test_parameters import bound, eps, handlers
 from cg import Point, turn
 from cg.utils import gcd
 from collections import deque

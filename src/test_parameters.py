@@ -1,8 +1,8 @@
 handlers = {}
 
 eps = 1
-bound = 15
+bound = 10
 
-number_of_segments = 17
+number_of_segments = 9
 seed = 111111
 

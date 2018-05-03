@@ -9,9 +9,9 @@ from matplotlib import collections as mc
 import ipywidgets as widgets
 from collections import defaultdict
 
-from utils import eps, bound
+from test_parameters import eps, bound
 from structs import SweepLine as SL, Segment, Point, pixelspassed
-from common import line, hot, current
+from testing import line, hot, current
 
 def _type_color(e):
 	if e.etype == SL.Event.Type.SEG_END:

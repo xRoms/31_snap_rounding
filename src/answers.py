@@ -1,6 +1,6 @@
 from sortedcontainers import SortedListWithKey
 from structs import Segment, Pixel, SweepLine as SL, Point, normalize, get_pixel, add_pixel_to_seg
-from common import hot, current, line, starting_segments
+from testing import hot, current, line, starting_segments
 from collections import deque
 
 

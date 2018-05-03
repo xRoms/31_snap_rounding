@@ -1,6 +1,6 @@
-from utils import handlers
+from test_parameters import handlers
 from structs import SweepLine as SL
-from common import line
+from testing import line
 from answers import *
 
 def segment_endpoint(point, segment):
